@@ -1,0 +1,9 @@
+# Ignore build and settings directories
+/Solshare/bin/
+/Solshare/.settings/
+
+# Ignore list of contracts
+*.dat
+
+# Ignore compiled Solidity files
+/solidity/Solshare
