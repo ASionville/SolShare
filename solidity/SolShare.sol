@@ -12,11 +12,12 @@ contract SolShare {
 	struct Expense {
 		uint256 id;
 		address payer;
-		uint256 amount;
+		uint256 amount; // Normalized amount in Group Currency
 		string description;
 		uint256 timestamp;
 		address[] participants;
-		string currency;
+		string originalCurrency;
+		uint256 originalAmount;
 		bool isSettlement;
 		bool exists;
 	}
@@ -25,6 +26,7 @@ contract SolShare {
 		uint256 id;
 		string name;
 		string description;
+		string currency; // Group Currency
 		address[] members;
 		mapping(address => Member) memberInfo;
 		address[] admins;
@@ -35,13 +37,13 @@ contract SolShare {
 	mapping(uint256 => Group) public groups;
 
 	// Events
-	event GroupCreated(uint256 indexed groupId, string name, string description, address creator);
+	event GroupCreated(uint256 indexed groupId, string name, string description, string currency, address creator);
 	event MemberAdded(uint256 indexed groupId, address member, string name);
 	event MemberJoined(uint256 indexed groupId, address member);
 	event MemberLeft(uint256 indexed groupId, address member);
 	event AdminPromoted(uint256 indexed groupId, address member);
 	event AdminDemoted(uint256 indexed groupId, address member);
-	event ExpenseAdded(uint256 indexed groupId, uint256 expenseId, address payer, uint256 amount, string currency, string description, bool isSettlement);
+	event ExpenseAdded(uint256 indexed groupId, uint256 expenseId, address payer, uint256 amount, uint256 originalAmount, string originalCurrency, string description, bool isSettlement);
 	event ExpenseEdited(uint256 indexed groupId, uint256 expenseId);
 	event ExpenseDeleted(uint256 indexed groupId, uint256 expenseId);
 
@@ -62,18 +64,19 @@ contract SolShare {
 	}
 
 	// Group management
-	function createGroup(string memory name, string memory description, string memory creatorName) public returns (uint256) {
-		uint256 groupId = uint256(keccak256(abi.encodePacked(name, description, msg.sender, block.timestamp)));
+	function createGroup(string memory name, string memory description, string memory currency, string memory creatorName) public returns (uint256) {
+		uint256 groupId = uint256(keccak256(abi.encodePacked(name, description, currency, msg.sender, block.timestamp)));
 		require(!groups[groupId].exists, "Group already exists");
 		Group storage g = groups[groupId];
 		g.id = groupId;
 		g.name = name;
 		g.description = description;
+		g.currency = currency;
 		g.exists = true;
 		g.members.push(msg.sender);
 		g.admins.push(msg.sender);
 		g.memberInfo[msg.sender] = Member(msg.sender, creatorName, true, true);
-		emit GroupCreated(groupId, name, description, msg.sender);
+		emit GroupCreated(groupId, name, description, currency, msg.sender);
 		emit MemberAdded(groupId, msg.sender, creatorName);
 		emit AdminPromoted(groupId, msg.sender);
 		return groupId;
@@ -129,7 +132,7 @@ contract SolShare {
 	}
 
 	// Expense management
-	function addExpense(uint256 groupId, uint256 amount, string memory description, address[] memory participants, string memory currency, bool isSettlement) public groupExists(groupId) onlyMember(groupId) {
+	function addExpense(uint256 groupId, uint256 amount, string memory description, address[] memory participants, uint256 originalAmount, string memory originalCurrency, bool isSettlement) public groupExists(groupId) onlyMember(groupId) {
 		require(amount > 0, "Expense must be > 0");
 		Group storage g = groups[groupId];
 		require(g.memberInfo[msg.sender].exists, "Payer must be member");
@@ -137,12 +140,13 @@ contract SolShare {
 			require(g.memberInfo[participants[i]].exists, "Participant must be member");
 		}
 		uint256 expenseId = g.expenses.length;
-		Expense memory e = Expense(expenseId, msg.sender, amount, description, block.timestamp, participants, currency, isSettlement, true);
+		// Emit event before creating the struct to reduce stack usage
+		emit ExpenseAdded(groupId, expenseId, msg.sender, amount, originalAmount, originalCurrency, description, isSettlement);
+		Expense memory e = Expense(expenseId, msg.sender, amount, description, block.timestamp, participants, originalCurrency, originalAmount, isSettlement, true);
 		g.expenses.push(e);
-		emit ExpenseAdded(groupId, expenseId, msg.sender, amount, currency, description, isSettlement);
 	}
 
-	function editExpense(uint256 groupId, uint256 expenseId, uint256 amount, string memory description, address[] memory participants, string memory currency, bool isSettlement) public groupExists(groupId) onlyAdmin(groupId) {
+	function editExpense(uint256 groupId, uint256 expenseId, uint256 amount, string memory description, address[] memory participants, uint256 originalAmount, string memory originalCurrency, bool isSettlement) public groupExists(groupId) onlyAdmin(groupId) {
 		Group storage g = groups[groupId];
 		require(expenseId < g.expenses.length, "Invalid expense");
 		require(amount > 0, "Expense must be > 0");
@@ -151,7 +155,8 @@ contract SolShare {
 		e.amount = amount;
 		e.description = description;
 		e.participants = participants;
-		e.currency = currency;
+		e.originalCurrency = originalCurrency;
+		e.originalAmount = originalAmount;
 		e.isSettlement = isSettlement;
 		emit ExpenseEdited(groupId, expenseId);
 	}

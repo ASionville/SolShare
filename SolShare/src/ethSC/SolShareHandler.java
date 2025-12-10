@@ -16,6 +16,7 @@ import org.web3j.tx.gas.DefaultGasProvider;
 import ethInfo.EthBasis;
 import ethSC.SolShare.Expense;
 import org.web3j.tuples.generated.Tuple4;
+import org.web3j.tuples.generated.Tuple5;
 
 public class SolShareHandler {
 	private static String address = "";
@@ -56,9 +57,9 @@ public class SolShareHandler {
 	}
 
 	// GROUP MANAGEMENT
-	public BigInteger createGroup(String name, String description, String creatorName) {
+	public BigInteger createGroup(String name, String description, String currency, String creatorName) {
 		try {
-			org.web3j.protocol.core.methods.response.TransactionReceipt receipt = solshare.createGroup(name, description, creatorName).send();
+			org.web3j.protocol.core.methods.response.TransactionReceipt receipt = solshare.createGroup(name, description, currency, creatorName).send();
 			List<SolShare.GroupCreatedEventResponse> events = solshare.getGroupCreatedEvents(receipt);
 			if (!events.isEmpty()) {
 				// Use generated hash as group ID
@@ -111,10 +112,10 @@ public class SolShareHandler {
 	}
 
 	// EXPENSE MANAGEMENT
-	public boolean addExpense(BigInteger groupId, BigInteger amount, String description, List<String> participants, String currency, boolean isSettlement) {
+	public boolean addExpense(BigInteger groupId, BigInteger amount, String description, List<String> participants, BigInteger originalAmount, String originalCurrency, boolean isSettlement) {
 		try {
 			List<String> addresses = participants;
-			solshare.addExpense(groupId, amount, description, addresses, currency, isSettlement).send();
+			solshare.addExpense(groupId, amount, description, addresses, originalAmount, originalCurrency, isSettlement).send();
 			return true;
 		} catch (Exception e) {
 			System.err.println("Error: " + getContractErrorMessage(e, "addExpense"));
@@ -122,10 +123,10 @@ public class SolShareHandler {
 		}
 	}
 
-	public boolean editExpense(BigInteger groupId, BigInteger expenseId, BigInteger amount, String description, List<String> participants, String currency, boolean isSettlement) {
+	public boolean editExpense(BigInteger groupId, BigInteger expenseId, BigInteger amount, String description, List<String> participants, BigInteger originalAmount, String originalCurrency, boolean isSettlement) {
 		try {
 			List<String> addresses = participants;
-			solshare.editExpense(groupId, expenseId, amount, description, addresses, currency, isSettlement).send();
+			solshare.editExpense(groupId, expenseId, amount, description, addresses, originalAmount, originalCurrency, isSettlement).send();
 			return true;
 		} catch (Exception e) {
 			System.err.println("Error: " + getContractErrorMessage(e, "editExpense"));
@@ -174,11 +175,21 @@ public class SolShareHandler {
 	// GETTERS
 	public String getGroupName(BigInteger groupId) {
 		try {
-			Tuple4<BigInteger, String, String, Boolean> result = solshare.groups(groupId).send();
+			Tuple5<BigInteger, String, String, String, Boolean> result = solshare.groups(groupId).send();
 			return result.component2();
 		} catch (Exception e) {
 			System.err.println("Error: " + getContractErrorMessage(e, "getGroupName"));
 			return groupId.toString();
+		}
+	}
+
+	public String getGroupCurrency(BigInteger groupId) {
+		try {
+			Tuple5<BigInteger, String, String, String, Boolean> result = solshare.groups(groupId).send();
+			return result.component4();
+		} catch (Exception e) {
+			System.err.println("Error: " + getContractErrorMessage(e, "getGroupCurrency"));
+			return "EUR";
 		}
 	}
 

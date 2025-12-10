@@ -145,11 +145,13 @@ public class SolShareApp {
 			String groupName = sc.nextLine();
 			System.out.print("Enter group description: ");
 			String groupDesc = sc.nextLine();
+			System.out.print("Enter group currency (e.g. EUR, TWD): ");
+			String currency = sc.nextLine().toUpperCase();
 			System.out.print("Enter your name: ");
 			String creatorName = sc.nextLine();
-			java.math.BigInteger groupId = handler.createGroup(groupName, groupDesc, creatorName);
+			java.math.BigInteger groupId = handler.createGroup(groupName, groupDesc, currency, creatorName);
 			if (groupId.compareTo(java.math.BigInteger.ZERO) > 0) {
-				System.out.println("Group created with unique ID: " + groupId.toString(16));
+				System.out.println("Group created with unique ID: " + groupId.toString());
 				UserGroupsManager.saveUserGroup(handler.getMyAddress(), groupId, EthBasis.password);
 				// Optionally, you can store groupId locally if needed
 				manageGroup(handler, groupId);
@@ -159,12 +161,41 @@ public class SolShareApp {
 		}
 
 		private static void connectToGroupFlow(SolShareHandler handler) {
-			// List group IDs (if available)
 			System.out.print("Enter group ID to connect: ");
 			String groupIdStr = sc.nextLine();
 			try {
 				java.math.BigInteger groupId = new java.math.BigInteger(groupIdStr);
-				manageGroup(handler, groupId);
+				
+				List<String> members = handler.getGroupMembers(groupId);
+				if (members == null) {
+					System.out.println("Group not found.");
+					return;
+				}
+
+				String myAddress = handler.getMyAddress();
+				if (members.contains(myAddress)) {
+					manageGroup(handler, groupId);
+				} else {
+					String gName = handler.getGroupName(groupId);
+					String name;
+					while (true) {
+						System.out.print("Enter your name to join: ");
+						name = sc.nextLine();
+						if (handler.isNameTaken(groupId, name)) {
+							System.out.println("Name already taken. Please choose another.");
+						} else {
+							break;
+						}
+					}
+					
+					if (handler.joinGroup(groupId, name)) {
+						System.out.println("Joined group successfully.");
+						UserGroupsManager.saveUserGroup(myAddress, groupId, EthBasis.password);
+						manageGroup(handler, groupId);
+					} else {
+						System.out.println("Failed to join group.");
+					}
+				}
 			} catch (Exception e) {
 				System.out.println("Invalid group ID.");
 			}
@@ -172,156 +203,206 @@ public class SolShareApp {
 
 		private static void manageGroup(SolShareHandler handler, java.math.BigInteger groupId) {
 			String groupName = handler.getGroupName(groupId);
+			String myAddress = handler.getMyAddress();
 
 			boolean managing = true;
 			while (managing) {
-				System.out.println("\n=== Manage Group " + groupName + " ===");
-				System.out.println("1. Join group");
-				System.out.println("2. Add expense");
-				System.out.println("3. View balances");
-				System.out.println("4. View expenses");
-				System.out.println("5. Settle up");
-				System.out.println("6. Promote admin");
-				System.out.println("7. Demote admin");
-				System.out.println("8. Leave group");
-				System.out.println("9. Efficient Settlement Plan");
-				System.out.println("10. Back to group menu");
+				List<String> admins = handler.getGroupAdmins(groupId);
+				boolean isAdmin = admins != null && admins.contains(myAddress);
+
+				System.out.println("\n=== Group: " + groupName + " ===");
+				if (isAdmin) {
+					System.out.println("1. Add expense");
+					System.out.println("2. View expenses");
+					System.out.println("3. View members balances");
+					System.out.println("4. Manage members");
+					System.out.println("5. Efficient settlement plan");
+					System.out.println("6. Get group code");
+					System.out.println("7. Leave group");
+					System.out.println("8. Back to group menu");
+				} else {
+					System.out.println("1. Add expense");
+					System.out.println("2. View expenses");
+					System.out.println("3. View members balances");
+					System.out.println("4. Efficient settlement plan");
+					System.out.println("5. Get group code");
+					System.out.println("6. Leave group");
+					System.out.println("7. Back to group menu");
+				}
 				System.out.print("Your choice: ");
-				int op = Integer.parseInt(sc.nextLine());
-				switch (op) {
-					case 1:
-						String name;
-						while (true) {
-							System.out.print("Enter your name: ");
-							name = sc.nextLine();
-							if (handler.isNameTaken(groupId, name)) {
-								System.out.println("Name already taken. Please choose another.");
-							} else {
-								break;
-							}
-						}
-						if (handler.joinGroup(groupId, name)) {
-							System.out.println("Joined group successfully.");
-							UserGroupsManager.saveUserGroup(handler.getMyAddress(), groupId, EthBasis.password);
-						} else
-							System.out.println("Failed to join group.");
-						break;
-					case 2:
-						System.out.print("Amount: ");
-						java.math.BigInteger amount = new java.math.BigInteger(sc.nextLine());
-						System.out.print("Description: ");
-						String desc = sc.nextLine();
-						System.out.print("Currency: ");
-						String currency = sc.nextLine();
-						System.out.print("Participants (comma separated names): ");
-						String[] parts = sc.nextLine().split(",");
-						java.util.List<String> participants = new java.util.ArrayList<>();
-						boolean allFound = true;
-						for (String pName : parts) {
-							String addr = handler.getMemberAddress(groupId, pName.trim());
-							if (addr == null || addr.equals("0x0000000000000000000000000000000000000000") || addr.equals("0x0") || addr.equals("0")) {
-								System.out.println("User " + pName.trim() + " not found.");
-								allFound = false;
-								break;
-							}
-							participants.add(addr);
-						}
-						if (!allFound) break;
+				int op = -1;
+				try {
+					op = Integer.parseInt(sc.nextLine());
+				} catch (NumberFormatException e) {
+					System.out.println("Invalid input.");
+					continue;
+				}
 
-						if (handler.addExpense(groupId, amount, desc, participants, currency, false))
-							System.out.println("Expense added.");
-						else
-							System.out.println("Failed to add expense.");
-						break;
-					case 3:
-						java.util.List<String> members = handler.getGroupMembers(groupId);
-						if (members != null) {
-							for (String member : members) {
-								java.math.BigInteger bal = handler.getNetBalance(groupId, member);
-								String memberName = handler.getMemberName(groupId, member);
-								System.out.println("Member " + memberName + " balance: " + bal);
-							}
-						} else {
-							System.out.println("Could not retrieve group members.");
-						}
-						break;
-					case 4:
-						java.util.List<ethSC.SolShare.Expense> expenses = handler.getExpenses(groupId);
-						if (expenses != null) {
-							for (ethSC.SolShare.Expense e : expenses) {
-								String payerName = handler.getMemberName(groupId, e.payer);
-								System.out.println("Expense #" + e.id + ": " + e.description + ", amount: " + e.amount + ", payer: " + payerName);
-							}
-						} else {
-							System.out.println("Could not retrieve expenses.");
-						}
-						break;
-					case 5:
-						System.out.print("To (name): ");
-						String toName = sc.nextLine();
-						String toAddr = handler.getMemberAddress(groupId, toName);
-						if (toAddr == null || toAddr.equals("0x0000000000000000000000000000000000000000") || toAddr.equals("0x0") || toAddr.equals("0")) {
-							System.out.println("User " + toName + " not found.");
+				if (isAdmin) {
+					switch (op) {
+						case 1: addExpenseFlow(handler, groupId); break;
+						case 2: viewExpensesFlow(handler, groupId); break;
+						case 3: viewBalancesFlow(handler, groupId); break;
+						case 4: manageMembersMenu(handler, groupId); break;
+						case 5: showEfficientSettlement(handler, groupId); break;
+						case 6: System.out.println("Group Code (ID): " + groupId); break;
+						case 7: 
+							if (leaveGroupFlow(handler, groupId)) managing = false; 
 							break;
-						}
-
-						System.out.print("Amount: ");
-						java.math.BigInteger settleAmount = new java.math.BigInteger(sc.nextLine());
-						System.out.print("Currency: ");
-						String settleCurrency = sc.nextLine();
-						
-						String descSettlement = "Settlement to " + toName;
-						
-						List<String> settleParticipants = new ArrayList<>();
-						settleParticipants.add(toAddr);
-						
-						if (handler.addExpense(groupId, settleAmount, descSettlement, settleParticipants, settleCurrency, true))
-							System.out.println("Settlement added.");
-						else
-							System.out.println("Failed to add settlement.");
-						break;
-					case 6:
-						System.out.print("Enter member name to promote: ");
-						String promoteName = sc.nextLine();
-						String promoteAddr = handler.getMemberAddress(groupId, promoteName);
-						if (promoteAddr == null || promoteAddr.equals("0x0000000000000000000000000000000000000000") || promoteAddr.equals("0x0") || promoteAddr.equals("0")) {
-							System.out.println("User " + promoteName + " not found.");
+						case 8: managing = false; break;
+						default: System.out.println("Invalid choice.");
+					}
+				} else {
+					switch (op) {
+						case 1: addExpenseFlow(handler, groupId); break;
+						case 2: viewExpensesFlow(handler, groupId); break;
+						case 3: viewBalancesFlow(handler, groupId); break;
+						case 4: showEfficientSettlement(handler, groupId); break;
+						case 5: System.out.println("Group Code (ID): " + groupId); break;
+						case 6: 
+							if (leaveGroupFlow(handler, groupId)) managing = false; 
 							break;
-						}
-						if (handler.promoteAdmin(groupId, promoteAddr))
-							System.out.println("Promoted.");
-						else
-							System.out.println("Failed to promote.");
-						break;
-					case 7:
-						System.out.print("Enter member name to demote: ");
-						String demoteName = sc.nextLine();
-						String demoteAddr = handler.getMemberAddress(groupId, demoteName);
-						if (demoteAddr == null || demoteAddr.equals("0x0000000000000000000000000000000000000000") || demoteAddr.equals("0x0") || demoteAddr.equals("0")) {
-							System.out.println("User " + demoteName + " not found.");
-							break;
-						}
-						if (handler.demoteAdmin(groupId, demoteAddr))
-							System.out.println("Demoted.");
-						else
-							System.out.println("Failed to demote.");
-						break;
-					case 8:
-						if (handler.leaveGroup(groupId))
-							System.out.println("Left group.");
-						else
-							System.out.println("Failed to leave group.");
-						break;
-					case 9:
-						showEfficientSettlement(handler, groupId);
-						break;
-					case 10:
-						managing = false;
-						break;
-					default:
-						System.out.println("Invalid choice.");
+						case 7: managing = false; break;
+						default: System.out.println("Invalid choice.");
+					}
 				}
 			}
+		}
+
+		private static void manageMembersMenu(SolShareHandler handler, BigInteger groupId) {
+			boolean inMenu = true;
+			while (inMenu) {
+				System.out.println("\n=== Manage Members ===");
+				System.out.println("1. Promote admin");
+				System.out.println("2. Demote admin");
+				System.out.println("3. Remove user");
+				System.out.println("4. Back");
+				System.out.print("Your choice: ");
+				int op = -1;
+				try {
+					op = Integer.parseInt(sc.nextLine());
+				} catch (NumberFormatException e) {
+					System.out.println("Invalid input.");
+					continue;
+				}
+				switch (op) {
+					case 1: promoteAdminFlow(handler, groupId); break;
+					case 2: demoteAdminFlow(handler, groupId); break;
+					case 3: removeUserFlow(handler, groupId); break;
+					case 4: inMenu = false; break;
+					default: System.out.println("Invalid choice.");
+				}
+			}
+		}
+
+		private static void addExpenseFlow(SolShareHandler handler, BigInteger groupId) {
+			System.out.print("Amount: ");
+			java.math.BigDecimal originalAmountBD = new java.math.BigDecimal(sc.nextLine());
+			System.out.print("Description: ");
+			String desc = sc.nextLine();
+			System.out.print("Currency (e.g. TWD): ");
+			String originalCurrency = sc.nextLine().toUpperCase();
+
+			String groupCurrency = handler.getGroupCurrency(groupId);
+			java.math.BigDecimal normalizedAmountBD = CurrencyConverter.convert(originalAmountBD, originalCurrency, groupCurrency);
+
+			if (normalizedAmountBD == null) {
+				System.out.println("Could not convert currency from " + originalCurrency + " to " + groupCurrency + ". Aborting.");
+				return;
+			}
+
+			// Scale by 100 to keep 2 decimals precision in integer storage
+			java.math.BigInteger amount = normalizedAmountBD.multiply(new java.math.BigDecimal(100)).toBigInteger();
+			java.math.BigInteger originalAmount = originalAmountBD.multiply(new java.math.BigDecimal(100)).toBigInteger();
+
+			System.out.print("Participants (comma separated names): ");
+			String[] parts = sc.nextLine().split(",");
+			java.util.List<String> participants = new java.util.ArrayList<>();
+			boolean allFound = true;
+			for (String pName : parts) {
+				String addr = handler.getMemberAddress(groupId, pName.trim());
+				if (addr == null || addr.equals("0x0000000000000000000000000000000000000000") || addr.equals("0x0") || addr.equals("0")) {
+					System.out.println("User " + pName.trim() + " not found.");
+					allFound = false;
+					break;
+				}
+				participants.add(addr);
+			}
+			if (!allFound) return;
+
+			if (handler.addExpense(groupId, amount, desc, participants, originalAmount, originalCurrency, false))
+				System.out.println("Expense added.");
+			else
+				System.out.println("Failed to add expense.");
+		}
+
+		private static void viewExpensesFlow(SolShareHandler handler, BigInteger groupId) {
+			java.util.List<ethSC.SolShare.Expense> expenses = handler.getExpenses(groupId);
+			if (expenses != null) {
+				for (ethSC.SolShare.Expense e : expenses) {
+					String payerName = handler.getMemberName(groupId, e.payer);
+					java.math.BigDecimal displayAmount = new java.math.BigDecimal(e.amount).divide(new java.math.BigDecimal(100));
+					System.out.println("Expense #" + e.id + ": " + e.description + ", amount: " + displayAmount + ", payer: " + payerName);
+				}
+			} else {
+				System.out.println("Could not retrieve expenses.");
+			}
+		}
+
+		private static void viewBalancesFlow(SolShareHandler handler, BigInteger groupId) {
+			java.util.List<String> members = handler.getGroupMembers(groupId);
+			if (members != null) {
+				for (String member : members) {
+					java.math.BigInteger bal = handler.getNetBalance(groupId, member);
+					java.math.BigDecimal displayBal = new java.math.BigDecimal(bal).divide(new java.math.BigDecimal(100));
+					String memberName = handler.getMemberName(groupId, member);
+					System.out.println("Member " + memberName + " balance: " + displayBal);
+				}
+			} else {
+				System.out.println("Could not retrieve group members.");
+			}
+		}
+
+		private static boolean leaveGroupFlow(SolShareHandler handler, BigInteger groupId) {
+			if (handler.leaveGroup(groupId)) {
+				System.out.println("Left group.");
+				return true;
+			} else {
+				System.out.println("Failed to leave group.");
+				return false;
+			}
+		}
+
+		private static void promoteAdminFlow(SolShareHandler handler, BigInteger groupId) {
+			System.out.print("Enter member name to promote: ");
+			String promoteName = sc.nextLine();
+			String promoteAddr = handler.getMemberAddress(groupId, promoteName);
+			if (promoteAddr == null || promoteAddr.equals("0x0000000000000000000000000000000000000000") || promoteAddr.equals("0x0") || promoteAddr.equals("0")) {
+				System.out.println("User " + promoteName + " not found.");
+				return;
+			}
+			if (handler.promoteAdmin(groupId, promoteAddr))
+				System.out.println("Promoted.");
+			else
+				System.out.println("Failed to promote.");
+		}
+
+		private static void demoteAdminFlow(SolShareHandler handler, BigInteger groupId) {
+			System.out.print("Enter member name to demote: ");
+			String demoteName = sc.nextLine();
+			String demoteAddr = handler.getMemberAddress(groupId, demoteName);
+			if (demoteAddr == null || demoteAddr.equals("0x0000000000000000000000000000000000000000") || demoteAddr.equals("0x0") || demoteAddr.equals("0")) {
+				System.out.println("User " + demoteName + " not found.");
+				return;
+			}
+			if (handler.demoteAdmin(groupId, demoteAddr))
+				System.out.println("Demoted.");
+			else
+				System.out.println("Failed to demote.");
+		}
+
+		private static void removeUserFlow(SolShareHandler handler, BigInteger groupId) {
+			System.out.println("Remove user functionality is not implemented in the backend.");
 		}
 
 		private static void showEfficientSettlement(SolShareHandler handler, BigInteger groupId) {
@@ -358,7 +439,8 @@ public class SolShareApp {
 				String debtorName = handler.getMemberName(groupId, debtor);
 				String creditorName = handler.getMemberName(groupId, creditor);
 				
-				System.out.println(debtorName + " pays " + creditorName + ": " + amount);
+				java.math.BigDecimal displayAmount = new java.math.BigDecimal(amount).divide(new java.math.BigDecimal(100));
+				System.out.println(debtorName + " pays " + creditorName + ": " + displayAmount);
 				
 				debt = debt.subtract(amount);
 				credit = credit.subtract(amount);
