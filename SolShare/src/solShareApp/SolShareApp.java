@@ -5,20 +5,40 @@ import java.util.Scanner;
 import java.util.ArrayList;
 import java.util.List;
 import java.math.BigInteger;
-import ethInfo.EthBasis;
+import ethInfo.Config;
 import ethSC.SolShareHandler;
 
 public class SolShareApp {
 	private static Scanner sc = new Scanner(System.in);
 
 	// ANSI Colors
-	public static final String ANSI_RESET = "\u001B[0m";
-	public static final String ANSI_RED = "\u001B[31m";
-	public static final String ANSI_GREEN = "\u001B[32m";
-	public static final String ANSI_YELLOW = "\u001B[33m";
-	public static final String ANSI_BLUE = "\u001B[34m";
-	public static final String ANSI_CYAN = "\u001B[36m";
-	public static final String ANSI_BOLD = "\u001B[1m";
+	public static final String ANSI_RESET;
+	public static final String ANSI_RED;
+	public static final String ANSI_GREEN;
+	public static final String ANSI_YELLOW;
+	public static final String ANSI_BLUE;
+	public static final String ANSI_CYAN;
+	public static final String ANSI_BOLD;
+
+	static {
+		if (Config.useANSIColors) {
+			ANSI_RESET = "\u001B[0m";
+			ANSI_RED = "\u001B[31m";
+			ANSI_GREEN = "\u001B[32m";
+			ANSI_YELLOW = "\u001B[33m";
+			ANSI_BLUE = "\u001B[34m";
+			ANSI_CYAN = "\u001B[36m";
+			ANSI_BOLD = "\u001B[1m";
+		} else {
+			ANSI_RESET = "";
+			ANSI_RED = "";
+			ANSI_GREEN = "";
+			ANSI_YELLOW = "";
+			ANSI_BLUE = "";
+			ANSI_CYAN = "";
+			ANSI_BOLD = "";
+		}
+	}
 
 		public static void main(String[] args) throws Exception {
 			login();
@@ -26,7 +46,7 @@ public class SolShareApp {
 		}
 
 		public static void login() throws Exception {
-			File keystoreDir = new File(EthBasis.credential);
+			File keystoreDir = new File(Config.credential);
 			File[] keystores = keystoreDir.listFiles();
 			if (keystores != null) {
 				System.out.println("Please choose the Ethereum account you want to use:");
@@ -36,13 +56,13 @@ public class SolShareApp {
 				System.out.print("Your choice (0...): ");
 				int choice = Integer.parseInt(sc.nextLine());
 				if (choice >= 0 && choice < keystores.length) {
-					EthBasis.credential = keystores[choice].getAbsolutePath();
+					Config.credential = keystores[choice].getAbsolutePath();
 				} else {
 					System.out.println("Abort.");
 					System.exit(1);
 				}
 				System.out.print("Please enter account password: ");
-				EthBasis.password = sc.nextLine();
+				Config.password = sc.nextLine();
 			} else {
 				System.err.println("No Ethereum account found on this machine.");
 				System.exit(1);
@@ -127,7 +147,7 @@ public class SolShareApp {
 
 		private static void myGroupsFlow(SolShareHandler handler) {
 			String myAddress = handler.getMyAddress();
-			List<BigInteger> myGroups = UserGroupsManager.getUserGroups(myAddress, EthBasis.password);
+			List<BigInteger> myGroups = UserGroupsManager.getUserGroups(myAddress, Config.password);
 			if (myGroups.isEmpty()) {
 				System.out.println("No saved groups found.");
 				return;
@@ -162,7 +182,7 @@ public class SolShareApp {
 			java.math.BigInteger groupId = handler.createGroup(groupName, groupDesc, currency, creatorName);
 			if (groupId.compareTo(java.math.BigInteger.ZERO) > 0) {
 				System.out.println(ANSI_GREEN + "Group created with unique share code: " + groupId.toString() + ANSI_RESET);
-				UserGroupsManager.saveUserGroup(handler.getMyAddress(), groupId, EthBasis.password);
+				UserGroupsManager.saveUserGroup(handler.getMyAddress(), groupId, Config.password);
 				// Optionally, you can store groupId locally if needed
 				manageGroup(handler, groupId);
 			} else {
@@ -201,7 +221,7 @@ public class SolShareApp {
 					System.out.println(ANSI_YELLOW + "Joining group... Confirmation pending..." + ANSI_RESET);
 					if (handler.joinGroup(groupId, name)) {
 						System.out.println(ANSI_GREEN + "Joined group successfully." + ANSI_RESET);
-						UserGroupsManager.saveUserGroup(myAddress, groupId, EthBasis.password);
+						UserGroupsManager.saveUserGroup(myAddress, groupId, Config.password);
 						manageGroup(handler, groupId);
 					} else {
 						System.out.println(ANSI_RED + "Failed to join group." + ANSI_RESET);

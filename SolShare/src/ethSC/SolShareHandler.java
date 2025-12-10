@@ -13,7 +13,7 @@ import org.web3j.tx.TransactionManager;
 import org.web3j.tx.gas.ContractGasProvider;
 import org.web3j.tx.gas.DefaultGasProvider;
 
-import ethInfo.EthBasis;
+import ethInfo.Config;
 import ethSC.SolShare.Expense;
 import org.web3j.tuples.generated.Tuple4;
 import org.web3j.tuples.generated.Tuple5;
@@ -27,18 +27,30 @@ public class SolShareHandler {
 	private static TransactionManager trm;
 
 	public SolShareHandler(String contractAddress) {
-		// Charge un contrat existant
-		web3j = Web3j.build(new WindowsIpcService(EthBasis.pipeLine));
+		// Load existing contract
+		
+		switch (Config.platform) {
+			case "Windows":
+				web3j = Web3j.build(new WindowsIpcService(Config.pipeLine));
+				break;
+			case "Unix":
+				web3j = Web3j.build(new UnixIpcService(Config.pipeLine));
+				break;
+			default:
+				System.err.println("Unsupported platform: " + Config.platform);
+				return;
+		}
+
 		try {
-			cr = WalletUtils.loadCredentials(EthBasis.password, EthBasis.credential);
-			Admin admin = Admin.build(new UnixIpcService(EthBasis.pipeLine));
-			admin.personalUnlockAccount(cr.getAddress(), EthBasis.password, BigInteger.ZERO);
+			cr = WalletUtils.loadCredentials(Config.password, Config.credential);
+			Admin admin = Admin.build(new UnixIpcService(Config.pipeLine));
+			admin.personalUnlockAccount(cr.getAddress(), Config.password, BigInteger.ZERO);
 		} catch (Exception e) {
 			System.err.println("Bad Wallet, Check Password or Credential File");
 			e.printStackTrace();
 		}
 		cgp = new DefaultGasProvider();
-		trm = new RawTransactionManager(web3j, cr, EthBasis.chainID);
+		trm = new RawTransactionManager(web3j, cr, Config.chainID);
 		try {
 			solshare = SolShare.load(contractAddress, web3j, trm, cgp);
 			address = contractAddress;
