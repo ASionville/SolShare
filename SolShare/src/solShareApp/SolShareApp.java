@@ -11,6 +11,15 @@ import ethSC.SolShareHandler;
 public class SolShareApp {
 	private static Scanner sc = new Scanner(System.in);
 
+	// ANSI Colors
+	public static final String ANSI_RESET = "\u001B[0m";
+	public static final String ANSI_RED = "\u001B[31m";
+	public static final String ANSI_GREEN = "\u001B[32m";
+	public static final String ANSI_YELLOW = "\u001B[33m";
+	public static final String ANSI_BLUE = "\u001B[34m";
+	public static final String ANSI_CYAN = "\u001B[36m";
+	public static final String ANSI_BOLD = "\u001B[1m";
+
 		public static void main(String[] args) throws Exception {
 			login();
 			mainMenu();
@@ -43,7 +52,7 @@ public class SolShareApp {
 		public static void mainMenu() throws Exception {
 			boolean running = true;
 			while (running) {
-				System.out.println("\n=== SolShare Main Menu ===");
+				System.out.println("\n" + ANSI_BLUE + ANSI_BOLD + "=== SolShare Main Menu ===" + ANSI_RESET);
 				System.out.println("1. Connect to a SolShare contract");
 				System.out.println("2. Quit");
 				System.out.print("Your choice (1/2): ");
@@ -90,10 +99,10 @@ public class SolShareApp {
 		private static void groupMenu(SolShareHandler handler) {
 			boolean inGroupMenu = true;
 			while (inGroupMenu) {
-				System.out.println("\n=== Group Menu ===");
+				System.out.println("\n" + ANSI_BLUE + ANSI_BOLD + "=== Group Menu ===" + ANSI_RESET);
 				System.out.println("1. Create a new group");
-				System.out.println("2. Connect to an existing group");
-				System.out.println("3. My groups");
+				System.out.println("2. My groups");
+				System.out.println("3. Join an existing group with share code");
 				System.out.println("4. Back to main menu");
 				System.out.print("Your choice (1/2/3/4): ");
 				int choice = Integer.parseInt(sc.nextLine());
@@ -102,10 +111,10 @@ public class SolShareApp {
 						createGroupFlow(handler);
 						break;
 					case 2:
-						connectToGroupFlow(handler);
+						myGroupsFlow(handler);
 						break;
 					case 3:
-						myGroupsFlow(handler);
+						connectToGroupFlow(handler);
 						break;
 					case 4:
 						inGroupMenu = false;
@@ -127,7 +136,7 @@ public class SolShareApp {
 			for (int i = 0; i < myGroups.size(); i++) {
 				BigInteger gid = myGroups.get(i);
 				String gName = handler.getGroupName(gid);
-				System.out.println((i + 1) + ". " + gName + " (ID: " + gid + ")");
+				System.out.println((i + 1) + ". " + gName + " (Share code: " + gid + ")");
 			}
 			System.out.print("Your choice (0 to cancel): ");
 			try {
@@ -149,9 +158,10 @@ public class SolShareApp {
 			String currency = sc.nextLine().toUpperCase();
 			System.out.print("Enter your name: ");
 			String creatorName = sc.nextLine();
+			System.out.println(ANSI_YELLOW + "Creating group... Confirmation pending..." + ANSI_RESET);
 			java.math.BigInteger groupId = handler.createGroup(groupName, groupDesc, currency, creatorName);
 			if (groupId.compareTo(java.math.BigInteger.ZERO) > 0) {
-				System.out.println("Group created with unique ID: " + groupId.toString());
+				System.out.println(ANSI_GREEN + "Group created with unique share code: " + groupId.toString() + ANSI_RESET);
 				UserGroupsManager.saveUserGroup(handler.getMyAddress(), groupId, EthBasis.password);
 				// Optionally, you can store groupId locally if needed
 				manageGroup(handler, groupId);
@@ -161,7 +171,7 @@ public class SolShareApp {
 		}
 
 		private static void connectToGroupFlow(SolShareHandler handler) {
-			System.out.print("Enter group ID to connect: ");
+			System.out.print("Enter group share code to connect: ");
 			String groupIdStr = sc.nextLine();
 			try {
 				java.math.BigInteger groupId = new java.math.BigInteger(groupIdStr);
@@ -188,16 +198,17 @@ public class SolShareApp {
 						}
 					}
 					
+					System.out.println(ANSI_YELLOW + "Joining group... Confirmation pending..." + ANSI_RESET);
 					if (handler.joinGroup(groupId, name)) {
-						System.out.println("Joined group successfully.");
+						System.out.println(ANSI_GREEN + "Joined group successfully." + ANSI_RESET);
 						UserGroupsManager.saveUserGroup(myAddress, groupId, EthBasis.password);
 						manageGroup(handler, groupId);
 					} else {
-						System.out.println("Failed to join group.");
+						System.out.println(ANSI_RED + "Failed to join group." + ANSI_RESET);
 					}
 				}
 			} catch (Exception e) {
-				System.out.println("Invalid group ID.");
+				System.out.println(ANSI_RED + "Invalid group share code." + ANSI_RESET);
 			}
 		}
 
@@ -210,7 +221,7 @@ public class SolShareApp {
 				List<String> admins = handler.getGroupAdmins(groupId);
 				boolean isAdmin = admins != null && admins.contains(myAddress);
 
-				System.out.println("\n=== Group: " + groupName + " ===");
+				System.out.println("\n" + ANSI_BLUE + ANSI_BOLD + "=== Group: " + groupName + " ===" + ANSI_RESET);
 				if (isAdmin) {
 					System.out.println("1. Add expense");
 					System.out.println("2. View expenses");
@@ -246,7 +257,7 @@ public class SolShareApp {
 						case 3: viewBalancesFlow(handler, groupId); break;
 						case 4: manageMembersMenu(handler, groupId); break;
 						case 5: showEfficientSettlement(handler, groupId); break;
-						case 6: System.out.println("Group Code (ID): " + groupId); break;
+						case 6: System.out.println("Group share code: " + groupId); break;
 						case 7: 
 							if (leaveGroupFlow(handler, groupId)) managing = false; 
 							break;
@@ -260,7 +271,7 @@ public class SolShareApp {
 						case 2: viewExpensesFlow(handler, groupId); break;
 						case 3: viewBalancesFlow(handler, groupId); break;
 						case 4: showEfficientSettlement(handler, groupId); break;
-						case 5: System.out.println("Group Code (ID): " + groupId); break;
+						case 5: System.out.println("Group share code: " + groupId); break;
 						case 6: 
 							if (leaveGroupFlow(handler, groupId)) managing = false; 
 							break;
@@ -274,7 +285,7 @@ public class SolShareApp {
 		private static void manageMembersMenu(SolShareHandler handler, BigInteger groupId) {
 			boolean inMenu = true;
 			while (inMenu) {
-				System.out.println("\n=== Manage Members ===");
+				System.out.println("\n" + ANSI_BLUE + ANSI_BOLD + "=== Manage Members ===" + ANSI_RESET);
 				System.out.println("1. Promote admin");
 				System.out.println("2. Demote admin");
 				System.out.println("3. Remove user");
@@ -332,16 +343,17 @@ public class SolShareApp {
 			}
 			if (!allFound) return;
 
+			System.out.println(ANSI_YELLOW + "Adding expense... Confirmation pending..." + ANSI_RESET);
 			if (handler.addExpense(groupId, amount, desc, participants, originalAmount, originalCurrency, false))
-				System.out.println("Expense added.");
+				System.out.println(ANSI_GREEN + "Expense added." + ANSI_RESET);
 			else
-				System.out.println("Failed to add expense.");
+				System.out.println(ANSI_RED + "Failed to add expense." + ANSI_RESET);
 		}
 
 		private static void manageExpensesMenu(SolShareHandler handler, BigInteger groupId) {
 			boolean inMenu = true;
 			while (inMenu) {
-				System.out.println("\n=== Manage Expenses ===");
+				System.out.println("\n" + ANSI_BLUE + ANSI_BOLD + "=== Manage Expenses ===" + ANSI_RESET);
 				System.out.println("1. Edit expense");
 				System.out.println("2. Delete expense");
 				System.out.println("3. Back");
@@ -363,12 +375,12 @@ public class SolShareApp {
 		}
 
 		private static void editExpenseFlow(SolShareHandler handler, BigInteger groupId) {
-			System.out.print("Enter expense ID to edit: ");
+			System.out.print("Enter expense number to edit: ");
 			BigInteger expenseId;
 			try {
 				expenseId = new BigInteger(sc.nextLine());
 			} catch (NumberFormatException e) {
-				System.out.println("Invalid ID.");
+				System.out.println("Invalid number.");
 				return;
 			}
 
@@ -442,30 +454,32 @@ public class SolShareApp {
 				if (!allFound) return;
 			}
 
+			System.out.println(ANSI_YELLOW + "Editing expense... Confirmation pending..." + ANSI_RESET);
 			if (handler.editExpense(groupId, expenseId, newAmount, newDesc, newParticipants, newOriginalAmount, newOriginalCurrency, e.isSettlement)) {
-				System.out.println("Expense edited successfully.");
+				System.out.println(ANSI_GREEN + "Expense edited successfully." + ANSI_RESET);
 			} else {
-				System.out.println("Failed to edit expense.");
+				System.out.println(ANSI_RED + "Failed to edit expense." + ANSI_RESET);
 			}
 		}
 
 		private static void deleteExpenseFlow(SolShareHandler handler, BigInteger groupId) {
-			System.out.print("Enter expense ID to delete: ");
+			System.out.print("Enter expense number to delete: ");
 			BigInteger expenseId;
 			try {
 				expenseId = new BigInteger(sc.nextLine());
 			} catch (NumberFormatException e) {
-				System.out.println("Invalid ID.");
+				System.out.println("Invalid number.");
 				return;
 			}
 			
 			System.out.print("Are you sure? (y/n): ");
 			String confirm = sc.nextLine();
 			if (confirm.equalsIgnoreCase("y")) {
+				System.out.println(ANSI_YELLOW + "Deleting expense... Confirmation pending..." + ANSI_RESET);
 				if (handler.deleteExpense(groupId, expenseId)) {
-					System.out.println("Expense deleted.");
+					System.out.println(ANSI_GREEN + "Expense deleted." + ANSI_RESET);
 				} else {
-					System.out.println("Failed to delete expense.");
+					System.out.println(ANSI_RED + "Failed to delete expense." + ANSI_RESET);
 				}
 			}
 		}
@@ -473,37 +487,51 @@ public class SolShareApp {
 		private static void viewExpensesFlow(SolShareHandler handler, BigInteger groupId) {
 			java.util.List<ethSC.SolShare.Expense> expenses = handler.getExpenses(groupId);
 			if (expenses != null) {
+				System.out.println(ANSI_CYAN + "---------------------------------------------------------------------------------" + ANSI_RESET);
+				System.out.printf(ANSI_BOLD + "%-5s | %-30s | %-15s | %-20s%n" + ANSI_RESET, "ID", "Description", "Amount", "Payer");
+				System.out.println(ANSI_CYAN + "---------------------------------------------------------------------------------" + ANSI_RESET);
 				for (ethSC.SolShare.Expense e : expenses) {
 					if (!e.exists) continue;
 					String payerName = handler.getMemberName(groupId, e.payer);
 					java.math.BigDecimal displayAmount = new java.math.BigDecimal(e.amount).divide(new java.math.BigDecimal(100));
-					System.out.println("Expense #" + e.id + ": " + e.description + ", amount: " + displayAmount + ", payer: " + payerName);
+					System.out.printf("%-5d | %-30s | %-15s | %-20s%n", e.id, e.description, displayAmount.toString(), payerName);
 				}
+				System.out.println(ANSI_CYAN + "---------------------------------------------------------------------------------" + ANSI_RESET);
 			} else {
-				System.out.println("Could not retrieve expenses.");
+				System.out.println(ANSI_RED + "Could not retrieve expenses." + ANSI_RESET);
 			}
 		}
 
 		private static void viewBalancesFlow(SolShareHandler handler, BigInteger groupId) {
 			java.util.List<String> members = handler.getGroupMembers(groupId);
 			if (members != null) {
+				System.out.println(ANSI_CYAN + "---------------------------------------------" + ANSI_RESET);
+				System.out.printf(ANSI_BOLD + "%-20s | %-20s%n" + ANSI_RESET, "Member", "Balance");
+				System.out.println(ANSI_CYAN + "---------------------------------------------" + ANSI_RESET);
 				for (String member : members) {
 					java.math.BigInteger bal = handler.getNetBalance(groupId, member);
 					java.math.BigDecimal displayBal = new java.math.BigDecimal(bal).divide(new java.math.BigDecimal(100));
 					String memberName = handler.getMemberName(groupId, member);
-					System.out.println("Member " + memberName + " balance: " + displayBal);
+					
+					String color = ANSI_RESET;
+					if (bal.compareTo(java.math.BigInteger.ZERO) > 0) color = ANSI_GREEN;
+					else if (bal.compareTo(java.math.BigInteger.ZERO) < 0) color = ANSI_RED;
+
+					System.out.printf("%-20s | " + color + "%-20s" + ANSI_RESET + "%n", memberName, displayBal.toString());
 				}
+				System.out.println(ANSI_CYAN + "---------------------------------------------" + ANSI_RESET);
 			} else {
-				System.out.println("Could not retrieve group members.");
+				System.out.println(ANSI_RED + "Could not retrieve group members." + ANSI_RESET);
 			}
 		}
 
 		private static boolean leaveGroupFlow(SolShareHandler handler, BigInteger groupId) {
+			System.out.println(ANSI_YELLOW + "Leaving group... Confirmation pending..." + ANSI_RESET);
 			if (handler.leaveGroup(groupId)) {
-				System.out.println("Left group.");
+				System.out.println(ANSI_GREEN + "Left group." + ANSI_RESET);
 				return true;
 			} else {
-				System.out.println("Failed to leave group.");
+				System.out.println(ANSI_RED + "Failed to leave group." + ANSI_RESET);
 				return false;
 			}
 		}
@@ -513,13 +541,14 @@ public class SolShareApp {
 			String promoteName = sc.nextLine();
 			String promoteAddr = handler.getMemberAddress(groupId, promoteName);
 			if (promoteAddr == null || promoteAddr.equals("0x0000000000000000000000000000000000000000") || promoteAddr.equals("0x0") || promoteAddr.equals("0")) {
-				System.out.println("User " + promoteName + " not found.");
+				System.out.println(ANSI_RED + "User " + promoteName + " not found." + ANSI_RESET);
 				return;
 			}
+			System.out.println(ANSI_YELLOW + "Promoting admin... Confirmation pending..." + ANSI_RESET);
 			if (handler.promoteAdmin(groupId, promoteAddr))
-				System.out.println("Promoted.");
+				System.out.println(ANSI_GREEN + "Promoted." + ANSI_RESET);
 			else
-				System.out.println("Failed to promote.");
+				System.out.println(ANSI_RED + "Failed to promote." + ANSI_RESET);
 		}
 
 		private static void demoteAdminFlow(SolShareHandler handler, BigInteger groupId) {
@@ -527,13 +556,14 @@ public class SolShareApp {
 			String demoteName = sc.nextLine();
 			String demoteAddr = handler.getMemberAddress(groupId, demoteName);
 			if (demoteAddr == null || demoteAddr.equals("0x0000000000000000000000000000000000000000") || demoteAddr.equals("0x0") || demoteAddr.equals("0")) {
-				System.out.println("User " + demoteName + " not found.");
+				System.out.println(ANSI_RED + "User " + demoteName + " not found." + ANSI_RESET);
 				return;
 			}
+			System.out.println(ANSI_YELLOW + "Demoting admin... Confirmation pending..." + ANSI_RESET);
 			if (handler.demoteAdmin(groupId, demoteAddr))
-				System.out.println("Demoted.");
+				System.out.println(ANSI_GREEN + "Demoted." + ANSI_RESET);
 			else
-				System.out.println("Failed to demote.");
+				System.out.println(ANSI_RED + "Failed to demote." + ANSI_RESET);
 		}
 
 		private static void removeUserFlow(SolShareHandler handler, BigInteger groupId) {
@@ -575,7 +605,7 @@ public class SolShareApp {
 				String creditorName = handler.getMemberName(groupId, creditor);
 				
 				java.math.BigDecimal displayAmount = new java.math.BigDecimal(amount).divide(new java.math.BigDecimal(100));
-				System.out.println(debtorName + " pays " + creditorName + ": " + displayAmount);
+				System.out.println(debtorName + " pays " + creditorName + ": " + ANSI_YELLOW + displayAmount + ANSI_RESET);
 				
 				debt = debt.subtract(amount);
 				credit = credit.subtract(amount);
