@@ -219,7 +219,8 @@ public class SolShareApp {
 					System.out.println("5. Efficient settlement plan");
 					System.out.println("6. Get group code");
 					System.out.println("7. Leave group");
-					System.out.println("8. Back to group menu");
+					System.out.println("8. Manage expenses");
+					System.out.println("9. Back to group menu");
 				} else {
 					System.out.println("1. Add expense");
 					System.out.println("2. View expenses");
@@ -249,7 +250,8 @@ public class SolShareApp {
 						case 7: 
 							if (leaveGroupFlow(handler, groupId)) managing = false; 
 							break;
-						case 8: managing = false; break;
+						case 8: manageExpensesMenu(handler, groupId); break;
+						case 9: managing = false; break;
 						default: System.out.println("Invalid choice.");
 					}
 				} else {
@@ -336,10 +338,143 @@ public class SolShareApp {
 				System.out.println("Failed to add expense.");
 		}
 
+		private static void manageExpensesMenu(SolShareHandler handler, BigInteger groupId) {
+			boolean inMenu = true;
+			while (inMenu) {
+				System.out.println("\n=== Manage Expenses ===");
+				System.out.println("1. Edit expense");
+				System.out.println("2. Delete expense");
+				System.out.println("3. Back");
+				System.out.print("Your choice: ");
+				int op = -1;
+				try {
+					op = Integer.parseInt(sc.nextLine());
+				} catch (NumberFormatException e) {
+					System.out.println("Invalid input.");
+					continue;
+				}
+				switch (op) {
+					case 1: editExpenseFlow(handler, groupId); break;
+					case 2: deleteExpenseFlow(handler, groupId); break;
+					case 3: inMenu = false; break;
+					default: System.out.println("Invalid choice.");
+				}
+			}
+		}
+
+		private static void editExpenseFlow(SolShareHandler handler, BigInteger groupId) {
+			System.out.print("Enter expense ID to edit: ");
+			BigInteger expenseId;
+			try {
+				expenseId = new BigInteger(sc.nextLine());
+			} catch (NumberFormatException e) {
+				System.out.println("Invalid ID.");
+				return;
+			}
+
+			List<ethSC.SolShare.Expense> expenses = handler.getExpenses(groupId);
+			if (expenses == null || expenseId.compareTo(BigInteger.valueOf(expenses.size())) >= 0) {
+				System.out.println("Expense not found.");
+				return;
+			}
+			ethSC.SolShare.Expense e = expenses.get(expenseId.intValue());
+			if (!e.exists) {
+				System.out.println("Expense has been deleted.");
+				return;
+			}
+
+			System.out.println("Editing Expense #" + e.id);
+			System.out.println("Current Description: " + e.description);
+			System.out.print("New Description (Enter to keep): ");
+			String newDesc = sc.nextLine();
+			if (newDesc.isEmpty()) newDesc = e.description;
+
+			System.out.println("Current Original Amount: " + new java.math.BigDecimal(e.originalAmount).divide(new java.math.BigDecimal(100)));
+			System.out.println("Current Original Currency: " + e.originalCurrency);
+			System.out.print("New Amount (Enter to keep): ");
+			String amountStr = sc.nextLine();
+			
+			java.math.BigInteger newOriginalAmount;
+			String newOriginalCurrency;
+			java.math.BigInteger newAmount;
+
+			if (amountStr.isEmpty()) {
+				newOriginalAmount = e.originalAmount;
+				newOriginalCurrency = e.originalCurrency;
+				newAmount = e.amount;
+			} else {
+				java.math.BigDecimal amountBD = new java.math.BigDecimal(amountStr);
+				System.out.print("New Currency (Enter to keep " + e.originalCurrency + "): ");
+				String currStr = sc.nextLine().toUpperCase();
+				if (currStr.isEmpty()) currStr = e.originalCurrency;
+				
+				newOriginalCurrency = currStr;
+				newOriginalAmount = amountBD.multiply(new java.math.BigDecimal(100)).toBigInteger();
+				
+				String groupCurrency = handler.getGroupCurrency(groupId);
+				java.math.BigDecimal normalizedBD = CurrencyConverter.convert(amountBD, newOriginalCurrency, groupCurrency);
+				if (normalizedBD == null) {
+					System.out.println("Conversion failed.");
+					return;
+				}
+				newAmount = normalizedBD.multiply(new java.math.BigDecimal(100)).toBigInteger();
+			}
+
+			System.out.println("Current Participants: " + e.participants.size() + " members");
+			System.out.print("New Participants (comma separated names, Enter to keep): ");
+			String partStr = sc.nextLine();
+			List<String> newParticipants = new ArrayList<>();
+			
+			if (partStr.isEmpty()) {
+				newParticipants = e.participants;
+			} else {
+				String[] parts = partStr.split(",");
+				boolean allFound = true;
+				for (String pName : parts) {
+					String addr = handler.getMemberAddress(groupId, pName.trim());
+					if (addr == null || addr.equals("0x0000000000000000000000000000000000000000") || addr.equals("0x0") || addr.equals("0")) {
+						System.out.println("User " + pName.trim() + " not found.");
+						allFound = false;
+						break;
+					}
+					newParticipants.add(addr);
+				}
+				if (!allFound) return;
+			}
+
+			if (handler.editExpense(groupId, expenseId, newAmount, newDesc, newParticipants, newOriginalAmount, newOriginalCurrency, e.isSettlement)) {
+				System.out.println("Expense edited successfully.");
+			} else {
+				System.out.println("Failed to edit expense.");
+			}
+		}
+
+		private static void deleteExpenseFlow(SolShareHandler handler, BigInteger groupId) {
+			System.out.print("Enter expense ID to delete: ");
+			BigInteger expenseId;
+			try {
+				expenseId = new BigInteger(sc.nextLine());
+			} catch (NumberFormatException e) {
+				System.out.println("Invalid ID.");
+				return;
+			}
+			
+			System.out.print("Are you sure? (y/n): ");
+			String confirm = sc.nextLine();
+			if (confirm.equalsIgnoreCase("y")) {
+				if (handler.deleteExpense(groupId, expenseId)) {
+					System.out.println("Expense deleted.");
+				} else {
+					System.out.println("Failed to delete expense.");
+				}
+			}
+		}
+
 		private static void viewExpensesFlow(SolShareHandler handler, BigInteger groupId) {
 			java.util.List<ethSC.SolShare.Expense> expenses = handler.getExpenses(groupId);
 			if (expenses != null) {
 				for (ethSC.SolShare.Expense e : expenses) {
+					if (!e.exists) continue;
 					String payerName = handler.getMemberName(groupId, e.payer);
 					java.math.BigDecimal displayAmount = new java.math.BigDecimal(e.amount).divide(new java.math.BigDecimal(100));
 					System.out.println("Expense #" + e.id + ": " + e.description + ", amount: " + displayAmount + ", payer: " + payerName);
