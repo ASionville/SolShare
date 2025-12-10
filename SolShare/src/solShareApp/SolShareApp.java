@@ -335,7 +335,7 @@ public class SolShareApp {
 			for (String pName : parts) {
 				String addr = handler.getMemberAddress(groupId, pName.trim());
 				if (addr == null || addr.equals("0x0000000000000000000000000000000000000000") || addr.equals("0x0") || addr.equals("0")) {
-					System.out.println("User " + pName.trim() + " not found.");
+					System.out.println(ANSI_RED + "User " + pName.trim() + " not found." + ANSI_RESET);
 					allFound = false;
 					break;
 				}
@@ -343,8 +343,67 @@ public class SolShareApp {
 			}
 			if (!allFound) return;
 
+			// Split logic
+			java.util.List<java.math.BigInteger> participantAmounts = new java.util.ArrayList<>();
+			System.out.println("Split type:");
+			System.out.println("1. Even split");
+			System.out.println("2. Specific amounts");
+			System.out.println("3. Percentages");
+			System.out.print("Your choice (1/2/3): ");
+			int splitChoice = 1;
+			try {
+				splitChoice = Integer.parseInt(sc.nextLine());
+			} catch (Exception e) {}
+
+			if (splitChoice == 2) {
+				java.math.BigInteger sum = java.math.BigInteger.ZERO;
+				for (int i = 0; i < participants.size(); i++) {
+					String pName = handler.getMemberName(groupId, participants.get(i));
+					System.out.print("Amount for " + pName + ": ");
+					java.math.BigDecimal pAmountBD = new java.math.BigDecimal(sc.nextLine());
+					
+					java.math.BigDecimal normalizedPAmountBD = CurrencyConverter.convert(pAmountBD, originalCurrency, groupCurrency);
+					if (normalizedPAmountBD == null) {
+						System.out.println(ANSI_RED + "Conversion failed." + ANSI_RESET);
+						return;
+					}
+					java.math.BigInteger pAmount = normalizedPAmountBD.multiply(new java.math.BigDecimal(100)).toBigInteger();
+					participantAmounts.add(pAmount);
+					sum = sum.add(pAmount);
+				}
+				java.math.BigInteger diff = sum.subtract(amount).abs();
+				if (diff.compareTo(java.math.BigInteger.valueOf(participants.size() + 5)) <= 0) {
+					if (!diff.equals(java.math.BigInteger.ZERO)) {
+						System.out.println(ANSI_YELLOW + "Adjusting total amount from " + amount + " to " + sum + " to match sum of parts (rounding)." + ANSI_RESET);
+						amount = sum;
+					}
+				} else {
+					System.out.println(ANSI_RED + "Error: Sum of amounts (" + sum + ") does not match total amount (" + amount + ")." + ANSI_RESET);
+					return;
+				}
+			} else if (splitChoice == 3) {
+				java.math.BigInteger sum = java.math.BigInteger.ZERO;
+				for (int i = 0; i < participants.size(); i++) {
+					String pName = handler.getMemberName(groupId, participants.get(i));
+					System.out.print("Percentage for " + pName + " (e.g. 33.3): ");
+					java.math.BigDecimal percent = new java.math.BigDecimal(sc.nextLine());
+					
+					java.math.BigInteger pAmount = new java.math.BigDecimal(amount).multiply(percent).divide(new java.math.BigDecimal(100)).toBigInteger();
+					participantAmounts.add(pAmount);
+					sum = sum.add(pAmount);
+				}
+				// Adjust rounding error to the first participant
+				if (!sum.equals(amount)) {
+					java.math.BigInteger diff = amount.subtract(sum);
+					participantAmounts.set(0, participantAmounts.get(0).add(diff));
+					System.out.println(ANSI_YELLOW + "Rounding difference of " + diff + " applied to " + handler.getMemberName(groupId, participants.get(0)) + ANSI_RESET);
+				}
+			} else {
+				// Even split: pass empty list
+			}
+
 			System.out.println(ANSI_YELLOW + "Adding expense... Confirmation pending..." + ANSI_RESET);
-			if (handler.addExpense(groupId, amount, desc, participants, originalAmount, originalCurrency, false))
+			if (handler.addExpense(groupId, amount, desc, participants, participantAmounts, originalAmount, originalCurrency, false))
 				System.out.println(ANSI_GREEN + "Expense added." + ANSI_RESET);
 			else
 				System.out.println(ANSI_RED + "Failed to add expense." + ANSI_RESET);
@@ -445,7 +504,7 @@ public class SolShareApp {
 				for (String pName : parts) {
 					String addr = handler.getMemberAddress(groupId, pName.trim());
 					if (addr == null || addr.equals("0x0000000000000000000000000000000000000000") || addr.equals("0x0") || addr.equals("0")) {
-						System.out.println("User " + pName.trim() + " not found.");
+						System.out.println(ANSI_RED + "User " + pName.trim() + " not found." + ANSI_RESET);
 						allFound = false;
 						break;
 					}
@@ -454,8 +513,66 @@ public class SolShareApp {
 				if (!allFound) return;
 			}
 
+			// Split logic for edit
+			java.util.List<java.math.BigInteger> newParticipantAmounts = new java.util.ArrayList<>();
+			System.out.println("Split type (Enter to keep current logic, or choose new):");
+			System.out.println("1. Even split");
+			System.out.println("2. Specific amounts");
+			System.out.println("3. Percentages");
+			System.out.print("Your choice (1/2/3): ");
+			String splitChoiceStr = sc.nextLine();
+			
+			if (splitChoiceStr.isEmpty()) {
+				// Default to even split if user hits Enter, as it's the safest default.
+			} else {
+				int splitChoice = Integer.parseInt(splitChoiceStr);
+				if (splitChoice == 2) {
+					java.math.BigInteger sum = java.math.BigInteger.ZERO;
+					for (int i = 0; i < newParticipants.size(); i++) {
+						String pName = handler.getMemberName(groupId, newParticipants.get(i));
+						System.out.print("Amount for " + pName + ": ");
+						java.math.BigDecimal pAmountBD = new java.math.BigDecimal(sc.nextLine());
+						
+						java.math.BigDecimal normalizedPAmountBD = CurrencyConverter.convert(pAmountBD, newOriginalCurrency, handler.getGroupCurrency(groupId));
+						if (normalizedPAmountBD == null) {
+							System.out.println(ANSI_RED + "Conversion failed." + ANSI_RESET);
+							return;
+						}
+						java.math.BigInteger pAmount = normalizedPAmountBD.multiply(new java.math.BigDecimal(100)).toBigInteger();
+						newParticipantAmounts.add(pAmount);
+						sum = sum.add(pAmount);
+					}
+					java.math.BigInteger diff = sum.subtract(newAmount).abs();
+					if (diff.compareTo(java.math.BigInteger.valueOf(newParticipants.size() + 5)) <= 0) {
+						if (!diff.equals(java.math.BigInteger.ZERO)) {
+							System.out.println(ANSI_YELLOW + "Adjusting total amount from " + newAmount + " to " + sum + " to match sum of parts (rounding)." + ANSI_RESET);
+							newAmount = sum;
+						}
+					} else {
+						System.out.println(ANSI_RED + "Error: Sum of amounts (" + sum + ") does not match total amount (" + newAmount + ")." + ANSI_RESET);
+						return;
+					}
+				} else if (splitChoice == 3) {
+					java.math.BigInteger sum = java.math.BigInteger.ZERO;
+					for (int i = 0; i < newParticipants.size(); i++) {
+						String pName = handler.getMemberName(groupId, newParticipants.get(i));
+						System.out.print("Percentage for " + pName + " (e.g. 33.3): ");
+						java.math.BigDecimal percent = new java.math.BigDecimal(sc.nextLine());
+						
+						java.math.BigInteger pAmount = new java.math.BigDecimal(newAmount).multiply(percent).divide(new java.math.BigDecimal(100)).toBigInteger();
+						newParticipantAmounts.add(pAmount);
+						sum = sum.add(pAmount);
+					}
+					if (!sum.equals(newAmount)) {
+						java.math.BigInteger diff = newAmount.subtract(sum);
+						newParticipantAmounts.set(0, newParticipantAmounts.get(0).add(diff));
+						System.out.println(ANSI_YELLOW + "Rounding difference of " + diff + " applied to " + handler.getMemberName(groupId, newParticipants.get(0)) + ANSI_RESET);
+					}
+				}
+			}
+
 			System.out.println(ANSI_YELLOW + "Editing expense... Confirmation pending..." + ANSI_RESET);
-			if (handler.editExpense(groupId, expenseId, newAmount, newDesc, newParticipants, newOriginalAmount, newOriginalCurrency, e.isSettlement)) {
+			if (handler.editExpense(groupId, expenseId, newAmount, newDesc, newParticipants, newParticipantAmounts, newOriginalAmount, newOriginalCurrency, e.isSettlement)) {
 				System.out.println(ANSI_GREEN + "Expense edited successfully." + ANSI_RESET);
 			} else {
 				System.out.println(ANSI_RED + "Failed to edit expense." + ANSI_RESET);
@@ -504,9 +621,10 @@ public class SolShareApp {
 
 		private static void viewBalancesFlow(SolShareHandler handler, BigInteger groupId) {
 			java.util.List<String> members = handler.getGroupMembers(groupId);
+			String groupCurrency = handler.getGroupCurrency(groupId);
 			if (members != null) {
 				System.out.println(ANSI_CYAN + "---------------------------------------------" + ANSI_RESET);
-				System.out.printf(ANSI_BOLD + "%-20s | %-20s%n" + ANSI_RESET, "Member", "Balance");
+				System.out.printf(ANSI_BOLD + "%-20s | %-20s%n" + ANSI_RESET, "Member", "Balance (" + groupCurrency + ")");
 				System.out.println(ANSI_CYAN + "---------------------------------------------" + ANSI_RESET);
 				for (String member : members) {
 					java.math.BigInteger bal = handler.getNetBalance(groupId, member);
@@ -603,9 +721,10 @@ public class SolShareApp {
 				BigInteger amount = debt.min(credit);
 				String debtorName = handler.getMemberName(groupId, debtor);
 				String creditorName = handler.getMemberName(groupId, creditor);
+				String groupCurrency = handler.getGroupCurrency(groupId);
 				
 				java.math.BigDecimal displayAmount = new java.math.BigDecimal(amount).divide(new java.math.BigDecimal(100));
-				System.out.println(debtorName + " pays " + creditorName + ": " + ANSI_YELLOW + displayAmount + ANSI_RESET);
+				System.out.println(debtorName + " pays " + creditorName + ": " + ANSI_YELLOW + displayAmount + " " + groupCurrency + ANSI_RESET);
 				
 				debt = debt.subtract(amount);
 				credit = credit.subtract(amount);

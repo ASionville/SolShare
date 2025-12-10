@@ -16,10 +16,22 @@ contract SolShare {
 		string description;
 		uint256 timestamp;
 		address[] participants;
+		uint256[] participantAmounts; // Empty if even split
 		string originalCurrency;
 		uint256 originalAmount;
 		bool isSettlement;
 		bool exists;
+	}
+
+	// Expense input struct to avoid "stack too deep"
+	struct ExpenseInput {
+		uint256 amount;
+		string description;
+		address[] participants;
+		uint256[] participantAmounts;
+		uint256 originalAmount;
+		string originalCurrency;
+		bool isSettlement;
 	}
 
 	struct Group {
@@ -132,29 +144,69 @@ contract SolShare {
 	}
 
 	// Expense management
-	function addExpense(uint256 groupId, uint256 amount, string memory description, address[] memory participants, uint256 originalAmount, string memory originalCurrency, bool isSettlement) public groupExists(groupId) onlyMember(groupId) {
-		require(amount > 0, "Expense must be > 0");
+	function addExpense(uint256 groupId, ExpenseInput memory input) public groupExists(groupId) onlyMember(groupId) {
+		require(input.amount > 0, "Expense must be > 0");
 		Group storage g = groups[groupId];
 		require(g.memberInfo[msg.sender].exists, "Payer must be member");
-		for (uint i = 0; i < participants.length; i++) {
-			require(g.memberInfo[participants[i]].exists, "Participant must be member");
+		for (uint i = 0; i < input.participants.length; i++) {
+			require(g.memberInfo[input.participants[i]].exists, "Participant must be member");
 		}
+		if (input.participantAmounts.length > 0) {
+			require(input.participantAmounts.length == input.participants.length, "Length mismatch");
+			uint256 sum = 0;
+			for (uint i = 0; i < input.participantAmounts.length; i++) {
+				sum += input.participantAmounts[i];
+			}
+			require(sum == input.amount, "Sum mismatch");
+		}
+
 		uint256 expenseId = g.expenses.length;
-		// Emit event before creating the struct to reduce stack usage
-		emit ExpenseAdded(groupId, expenseId, msg.sender, amount, originalAmount, originalCurrency, description, isSettlement);
-		Expense memory e = Expense(expenseId, msg.sender, amount, description, block.timestamp, participants, originalCurrency, originalAmount, isSettlement, true);
+		Expense memory e = Expense(
+			expenseId,
+			msg.sender,
+			input.amount,
+			input.description,
+			block.timestamp,
+			input.participants,
+			input.participantAmounts,
+			input.originalCurrency,
+			input.originalAmount,
+			input.isSettlement,
+			true
+		);
 		g.expenses.push(e);
+		emit ExpenseAdded(
+			groupId,
+			expenseId,
+			msg.sender,
+			input.amount,
+			input.originalAmount,
+			input.originalCurrency,
+			input.description,
+			input.isSettlement
+		);
 	}
 
-	function editExpense(uint256 groupId, uint256 expenseId, uint256 amount, string memory description, address[] memory participants, uint256 originalAmount, string memory originalCurrency, bool isSettlement) public groupExists(groupId) onlyAdmin(groupId) {
+	function editExpense(uint256 groupId, uint256 expenseId, uint256 amount, string memory description, address[] memory participants, uint256[] memory participantAmounts, uint256 originalAmount, string memory originalCurrency, bool isSettlement) public groupExists(groupId) onlyAdmin(groupId) {
 		Group storage g = groups[groupId];
 		require(expenseId < g.expenses.length, "Invalid expense");
 		require(amount > 0, "Expense must be > 0");
 		Expense storage e = g.expenses[expenseId];
 		require(e.exists, "Expense does not exist");
+		
+		if (participantAmounts.length > 0) {
+			require(participantAmounts.length == participants.length, "Length mismatch");
+			uint256 sum = 0;
+			for (uint i = 0; i < participantAmounts.length; i++) {
+				sum += participantAmounts[i];
+			}
+			require(sum == amount, "Sum mismatch");
+		}
+
 		e.amount = amount;
 		e.description = description;
 		e.participants = participants;
+		e.participantAmounts = participantAmounts;
 		e.originalCurrency = originalCurrency;
 		e.originalAmount = originalAmount;
 		e.isSettlement = isSettlement;
@@ -177,11 +229,32 @@ contract SolShare {
 		for (uint i = 0; i < g.expenses.length; i++) {
 			Expense storage e = g.expenses[i];
 			if (!e.exists) continue;
-			uint256 share = e.amount / e.participants.length;
-			for (uint j = 0; j < e.participants.length; j++) {
-				if (e.participants[j] == member) {
-					net -= int256(share);
+			
+			uint256 share = 0;
+			bool isParticipant = false;
+
+			if (e.participantAmounts.length > 0) {
+				// Uneven split
+				for (uint j = 0; j < e.participants.length; j++) {
+					if (e.participants[j] == member) {
+						share = e.participantAmounts[j];
+						isParticipant = true;
+						break;
+					}
 				}
+			} else {
+				// Even split
+				share = e.amount / e.participants.length;
+				for (uint j = 0; j < e.participants.length; j++) {
+					if (e.participants[j] == member) {
+						isParticipant = true;
+						break;
+					}
+				}
+			}
+
+			if (isParticipant) {
+				net -= int256(share);
 			}
 			if (e.payer == member) {
 				net += int256(e.amount);

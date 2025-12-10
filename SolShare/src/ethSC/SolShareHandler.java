@@ -112,10 +112,10 @@ public class SolShareHandler {
 	}
 
 	// EXPENSE MANAGEMENT
-	public boolean addExpense(BigInteger groupId, BigInteger amount, String description, List<String> participants, BigInteger originalAmount, String originalCurrency, boolean isSettlement) {
+	public boolean addExpense(BigInteger groupId, BigInteger amount, String description, List<String> participants, List<BigInteger> participantAmounts, BigInteger originalAmount, String originalCurrency, boolean isSettlement) {
 		try {
-			List<String> addresses = participants;
-			solshare.addExpense(groupId, amount, description, addresses, originalAmount, originalCurrency, isSettlement).send();
+			SolShare.ExpenseInput input = new SolShare.ExpenseInput(amount, description, participants, participantAmounts, originalAmount, originalCurrency, isSettlement);
+			solshare.addExpense(groupId, input).send();
 			return true;
 		} catch (Exception e) {
 			System.err.println("Error: " + getContractErrorMessage(e, "addExpense"));
@@ -123,10 +123,10 @@ public class SolShareHandler {
 		}
 	}
 
-	public boolean editExpense(BigInteger groupId, BigInteger expenseId, BigInteger amount, String description, List<String> participants, BigInteger originalAmount, String originalCurrency, boolean isSettlement) {
+	public boolean editExpense(BigInteger groupId, BigInteger expenseId, BigInteger amount, String description, List<String> participants, List<BigInteger> participantAmounts, BigInteger originalAmount, String originalCurrency, boolean isSettlement) {
 		try {
 			List<String> addresses = participants;
-			solshare.editExpense(groupId, expenseId, amount, description, addresses, originalAmount, originalCurrency, isSettlement).send();
+			solshare.editExpense(groupId, expenseId, amount, description, addresses, participantAmounts, originalAmount, originalCurrency, isSettlement).send();
 			return true;
 		} catch (Exception e) {
 			System.err.println("Error: " + getContractErrorMessage(e, "editExpense"));
