@@ -15,6 +15,7 @@ import org.web3j.tx.gas.DefaultGasProvider;
 
 import ethInfo.EthBasis;
 import ethSC.SolShare.Expense;
+import org.web3j.tuples.generated.Tuple4;
 
 public class SolShareHandler {
 	private static String address = "";
@@ -50,12 +51,17 @@ public class SolShareHandler {
 		return address;
 	}
 
+	public String getMyAddress() {
+		return cr.getAddress();
+	}
+
 	// GROUP MANAGEMENT
 	public BigInteger createGroup(String name, String description, String creatorName) {
 		try {
 			org.web3j.protocol.core.methods.response.TransactionReceipt receipt = solshare.createGroup(name, description, creatorName).send();
 			List<SolShare.GroupCreatedEventResponse> events = solshare.getGroupCreatedEvents(receipt);
 			if (!events.isEmpty()) {
+				// Use generated hash as group ID
 				return events.get(0).groupId;
 			}
 		} catch (Exception e) {
@@ -147,7 +153,35 @@ public class SolShareHandler {
 		}
 	}
 
+	public boolean isNameTaken(BigInteger groupId, String memberName) {
+		try {
+			return solshare.isNameTaken(groupId, memberName).send();
+		} catch (Exception e) {
+			System.err.println("Error: " + getContractErrorMessage(e, "isNameTaken"));
+			return false;
+		}
+	}
+
+	public String getMemberAddress(BigInteger groupId, String memberName) {
+		try {
+			return solshare.getMemberAddress(groupId, memberName).send();
+		} catch (Exception e) {
+			System.err.println("Error: " + getContractErrorMessage(e, "getMemberAddress"));
+			return "";
+		}
+	}
+
 	// GETTERS
+	public String getGroupName(BigInteger groupId) {
+		try {
+			Tuple4<BigInteger, String, String, Boolean> result = solshare.groups(groupId).send();
+			return result.component2();
+		} catch (Exception e) {
+			System.err.println("Error: " + getContractErrorMessage(e, "getGroupName"));
+			return groupId.toString();
+		}
+	}
+
 	public List<String> getGroupMembers(BigInteger groupId) {
 		try {
 			return solshare.getGroupMembers(groupId).send();
@@ -206,9 +240,5 @@ public class SolShareHandler {
 	// EVENTS
 	public List<SolShare.GroupCreatedEventResponse> getGroupCreatedEvents(org.web3j.protocol.core.methods.response.TransactionReceipt receipt) {
 		return solshare.getGroupCreatedEvents(receipt);
-	}
-
-	public SolShare getSolShareSmartContract() {
-		return solshare;
 	}
 }

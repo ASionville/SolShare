@@ -93,8 +93,9 @@ public class SolShareApp {
 				System.out.println("\n=== Group Menu ===");
 				System.out.println("1. Create a new group");
 				System.out.println("2. Connect to an existing group");
-				System.out.println("3. Back to main menu");
-				System.out.print("Your choice (1/2/3): ");
+				System.out.println("3. My groups");
+				System.out.println("4. Back to main menu");
+				System.out.print("Your choice (1/2/3/4): ");
 				int choice = Integer.parseInt(sc.nextLine());
 				switch (choice) {
 					case 1:
@@ -104,11 +105,38 @@ public class SolShareApp {
 						connectToGroupFlow(handler);
 						break;
 					case 3:
+						myGroupsFlow(handler);
+						break;
+					case 4:
 						inGroupMenu = false;
 						break;
 					default:
 						System.out.println("Invalid choice.");
 				}
+			}
+		}
+
+		private static void myGroupsFlow(SolShareHandler handler) {
+			String myAddress = handler.getMyAddress();
+			List<BigInteger> myGroups = UserGroupsManager.getUserGroups(myAddress, EthBasis.password);
+			if (myGroups.isEmpty()) {
+				System.out.println("No saved groups found.");
+				return;
+			}
+			System.out.println("Select a group:");
+			for (int i = 0; i < myGroups.size(); i++) {
+				BigInteger gid = myGroups.get(i);
+				String gName = handler.getGroupName(gid);
+				System.out.println((i + 1) + ". " + gName + " (ID: " + gid + ")");
+			}
+			System.out.print("Your choice (0 to cancel): ");
+			try {
+				int choice = Integer.parseInt(sc.nextLine());
+				if (choice > 0 && choice <= myGroups.size()) {
+					manageGroup(handler, myGroups.get(choice - 1));
+				}
+			} catch (Exception e) {
+				System.out.println("Invalid input.");
 			}
 		}
 
@@ -121,7 +149,8 @@ public class SolShareApp {
 			String creatorName = sc.nextLine();
 			java.math.BigInteger groupId = handler.createGroup(groupName, groupDesc, creatorName);
 			if (groupId.compareTo(java.math.BigInteger.ZERO) > 0) {
-				System.out.println("Group created with ID: " + groupId);
+				System.out.println("Group created with unique ID: " + groupId.toString(16));
+				UserGroupsManager.saveUserGroup(handler.getMyAddress(), groupId, EthBasis.password);
 				// Optionally, you can store groupId locally if needed
 				manageGroup(handler, groupId);
 			} else {
@@ -142,9 +171,11 @@ public class SolShareApp {
 		}
 
 		private static void manageGroup(SolShareHandler handler, java.math.BigInteger groupId) {
+			String groupName = handler.getGroupName(groupId);
+
 			boolean managing = true;
 			while (managing) {
-				System.out.println("\n=== Manage Group " + groupId + " ===");
+				System.out.println("\n=== Manage Group " + groupName + " ===");
 				System.out.println("1. Join group");
 				System.out.println("2. Add expense");
 				System.out.println("3. View balances");
@@ -159,11 +190,20 @@ public class SolShareApp {
 				int op = Integer.parseInt(sc.nextLine());
 				switch (op) {
 					case 1:
-						System.out.print("Enter your name: ");
-						String name = sc.nextLine();
-						if (handler.joinGroup(groupId, name))
+						String name;
+						while (true) {
+							System.out.print("Enter your name: ");
+							name = sc.nextLine();
+							if (handler.isNameTaken(groupId, name)) {
+								System.out.println("Name already taken. Please choose another.");
+							} else {
+								break;
+							}
+						}
+						if (handler.joinGroup(groupId, name)) {
 							System.out.println("Joined group successfully.");
-						else
+							UserGroupsManager.saveUserGroup(handler.getMyAddress(), groupId, EthBasis.password);
+						} else
 							System.out.println("Failed to join group.");
 						break;
 					case 2:
@@ -173,10 +213,21 @@ public class SolShareApp {
 						String desc = sc.nextLine();
 						System.out.print("Currency: ");
 						String currency = sc.nextLine();
-						System.out.print("Participants (comma separated addresses): ");
+						System.out.print("Participants (comma separated names): ");
 						String[] parts = sc.nextLine().split(",");
 						java.util.List<String> participants = new java.util.ArrayList<>();
-						for (String p : parts) participants.add(p.trim());
+						boolean allFound = true;
+						for (String pName : parts) {
+							String addr = handler.getMemberAddress(groupId, pName.trim());
+							if (addr == null || addr.equals("0x0000000000000000000000000000000000000000") || addr.equals("0x0") || addr.equals("0")) {
+								System.out.println("User " + pName.trim() + " not found.");
+								allFound = false;
+								break;
+							}
+							participants.add(addr);
+						}
+						if (!allFound) break;
+
 						if (handler.addExpense(groupId, amount, desc, participants, currency, false))
 							System.out.println("Expense added.");
 						else
@@ -188,7 +239,7 @@ public class SolShareApp {
 							for (String member : members) {
 								java.math.BigInteger bal = handler.getNetBalance(groupId, member);
 								String memberName = handler.getMemberName(groupId, member);
-								System.out.println("Member " + memberName + " (" + member + ") balance: " + bal);
+								System.out.println("Member " + memberName + " balance: " + bal);
 							}
 						} else {
 							System.out.println("Could not retrieve group members.");
@@ -198,48 +249,31 @@ public class SolShareApp {
 						java.util.List<ethSC.SolShare.Expense> expenses = handler.getExpenses(groupId);
 						if (expenses != null) {
 							for (ethSC.SolShare.Expense e : expenses) {
-								System.out.println("Expense #" + e.id + ": " + e.description + ", amount: " + e.amount + ", payer: " + e.payer);
+								String payerName = handler.getMemberName(groupId, e.payer);
+								System.out.println("Expense #" + e.id + ": " + e.description + ", amount: " + e.amount + ", payer: " + payerName);
 							}
 						} else {
 							System.out.println("Could not retrieve expenses.");
 						}
 						break;
 					case 5:
-						System.out.print("To address: ");
-						String to = sc.nextLine();
+						System.out.print("To (name): ");
+						String toName = sc.nextLine();
+						String toAddr = handler.getMemberAddress(groupId, toName);
+						if (toAddr == null || toAddr.equals("0x0000000000000000000000000000000000000000") || toAddr.equals("0x0") || toAddr.equals("0")) {
+							System.out.println("User " + toName + " not found.");
+							break;
+						}
+
 						System.out.print("Amount: ");
 						java.math.BigInteger settleAmount = new java.math.BigInteger(sc.nextLine());
 						System.out.print("Currency: ");
 						String settleCurrency = sc.nextLine();
 						
-						// Get names
-						// Assuming current user is the one running the app, but we don't have current user address easily available in this context without asking or storing it.
-						// However, the handler uses credentials loaded in constructor.
-						// We can't easily get "my" address from handler public interface unless we expose it.
-						// But wait, handler uses `cr` which is static in `SolShareHandler`.
-						// I should probably expose `getMyAddress` in `SolShareHandler` or just use "Me" if I can't get it.
-						// But `SolShareHandler` has `cr` private.
-						// I'll assume the user knows who they are or I'll just use "Settlement" as description prefix.
-						// The requirement says: "Use stored names for A and B in the description."
-						// I need A's name (payer) and B's name (payee).
-						// I can get B's name using `getMemberName`.
-						// I can't get A's name easily without A's address.
-						// I'll add `getMyAddress` to `SolShareHandler`? No, I can't modify `SolShareHandler` easily to expose private `cr`.
-						// Actually, `SolShareHandler` has `cr` as static.
-						// I can add a getter for it in `SolShareHandler`?
-						// I already modified `SolShareHandler`. I can add `getMyAddress`.
-						
-						// Let's assume I can't modify `SolShareHandler` again or I don't want to.
-						// I'll just ask for the user's address or name? No, that's annoying.
-						// I'll modify `SolShareHandler` to add `getMyAddress()` since I already rewrote it.
-						// Wait, I already wrote `SolShareHandler`. I missed `getMyAddress`.
-						// I'll just use "Settlement to [Name B]" for now, or try to fetch it.
-						
-						String toName = handler.getMemberName(groupId, to);
 						String descSettlement = "Settlement to " + toName;
 						
 						List<String> settleParticipants = new ArrayList<>();
-						settleParticipants.add(to);
+						settleParticipants.add(toAddr);
 						
 						if (handler.addExpense(groupId, settleAmount, descSettlement, settleParticipants, settleCurrency, true))
 							System.out.println("Settlement added.");
@@ -247,16 +281,26 @@ public class SolShareApp {
 							System.out.println("Failed to add settlement.");
 						break;
 					case 6:
-						System.out.print("Enter member address to promote: ");
-						String promoteAddr = sc.nextLine();
+						System.out.print("Enter member name to promote: ");
+						String promoteName = sc.nextLine();
+						String promoteAddr = handler.getMemberAddress(groupId, promoteName);
+						if (promoteAddr == null || promoteAddr.equals("0x0000000000000000000000000000000000000000") || promoteAddr.equals("0x0") || promoteAddr.equals("0")) {
+							System.out.println("User " + promoteName + " not found.");
+							break;
+						}
 						if (handler.promoteAdmin(groupId, promoteAddr))
 							System.out.println("Promoted.");
 						else
 							System.out.println("Failed to promote.");
 						break;
 					case 7:
-						System.out.print("Enter member address to demote: ");
-						String demoteAddr = sc.nextLine();
+						System.out.print("Enter member name to demote: ");
+						String demoteName = sc.nextLine();
+						String demoteAddr = handler.getMemberAddress(groupId, demoteName);
+						if (demoteAddr == null || demoteAddr.equals("0x0000000000000000000000000000000000000000") || demoteAddr.equals("0x0") || demoteAddr.equals("0")) {
+							System.out.println("User " + demoteName + " not found.");
+							break;
+						}
 						if (handler.demoteAdmin(groupId, demoteAddr))
 							System.out.println("Demoted.");
 						else

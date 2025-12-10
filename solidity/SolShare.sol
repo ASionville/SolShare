@@ -32,7 +32,6 @@ contract SolShare {
 		bool exists;
 	}
 
-	uint256 public nextGroupId = 1;
 	mapping(uint256 => Group) public groups;
 
 	// Events
@@ -64,7 +63,8 @@ contract SolShare {
 
 	// Group management
 	function createGroup(string memory name, string memory description, string memory creatorName) public returns (uint256) {
-		uint256 groupId = nextGroupId++;
+		uint256 groupId = uint256(keccak256(abi.encodePacked(name, description, msg.sender, block.timestamp)));
+		require(!groups[groupId].exists, "Group already exists");
 		Group storage g = groups[groupId];
 		g.id = groupId;
 		g.name = name;
@@ -183,6 +183,31 @@ contract SolShare {
 			}
 		}
 		return net;
+	}
+
+
+	// Checks if a name is already taken in the group
+	function isNameTaken(uint256 groupId, string memory name) public view groupExists(groupId) returns (bool) {
+		Group storage g = groups[groupId];
+		for (uint i = 0; i < g.members.length; i++) {
+			address addr = g.members[i];
+			if (keccak256(bytes(g.memberInfo[addr].name)) == keccak256(bytes(name))) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// Gets the address of a member by their name
+	function getMemberAddress(uint256 groupId, string memory name) public view groupExists(groupId) returns (address) {
+		Group storage g = groups[groupId];
+		for (uint i = 0; i < g.members.length; i++) {
+			address addr = g.members[i];
+			if (keccak256(bytes(g.memberInfo[addr].name)) == keccak256(bytes(name))) {
+				return addr;
+			}
+		}
+		return address(0);
 	}
 
 	// Getters
