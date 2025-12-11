@@ -118,6 +118,24 @@ contract SolShare {
 		emit MemberLeft(groupId, msg.sender);
 	}
 
+	function removeMember(uint256 groupId, address member) public groupExists(groupId) onlyAdmin(groupId) {
+		Group storage g = groups[groupId];
+		require(g.memberInfo[member].exists, "Not a member");
+		require(getNetBalance(groupId, member) == 0, "Debt must be zero to remove");
+		require(!g.memberInfo[member].isAdmin, "Cannot remove an admin directly");
+
+		g.memberInfo[member].exists = false;
+		// Remove from members array
+		for (uint i = 0; i < g.members.length; i++) {
+			if (g.members[i] == member) {
+				g.members[i] = g.members[g.members.length - 1];
+				g.members.pop();
+				break;
+			}
+		}
+		emit MemberLeft(groupId, member);
+	}
+
 	function promoteAdmin(uint256 groupId, address member) public groupExists(groupId) onlyAdmin(groupId) {
 		Group storage g = groups[groupId];
 		require(g.memberInfo[member].exists, "Not a member");

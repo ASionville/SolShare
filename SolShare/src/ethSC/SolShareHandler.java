@@ -123,6 +123,16 @@ public class SolShareHandler {
 		}
 	}
 
+	public boolean removeMember(BigInteger groupId, String memberAddress) {
+		try {
+			solshare.removeMember(groupId, memberAddress).send();
+			return true;
+		} catch (Exception e) {
+			System.err.println("Error: " + getContractErrorMessage(e, "removeMember"));
+			return false;
+		}
+	}
+
 	// EXPENSE MANAGEMENT
 	public boolean addExpense(BigInteger groupId, BigInteger amount, String description, List<String> participants, List<BigInteger> participantAmounts, BigInteger originalAmount, String originalCurrency, boolean isSettlement) {
 		try {

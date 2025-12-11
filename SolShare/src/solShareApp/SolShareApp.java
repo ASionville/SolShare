@@ -625,7 +625,7 @@ public class SolShareApp {
 			java.util.List<ethSC.SolShare.Expense> expenses = handler.getExpenses(groupId);
 			if (expenses != null) {
 				System.out.println(ANSI_CYAN + "---------------------------------------------------------------------------------" + ANSI_RESET);
-				System.out.printf(ANSI_BOLD + "%-5s | %-30s | %-15s | %-20s%n" + ANSI_RESET, "ID", "Description", "Amount", "Payer");
+				System.out.printf(ANSI_BOLD + "%-5s | %-30s | %-15s | %-20s%n" + ANSI_RESET, "Number", "Description", "Amount (" + handler.getGroupCurrency(groupId) + ")", "Payer");
 				System.out.println(ANSI_CYAN + "---------------------------------------------------------------------------------" + ANSI_RESET);
 				for (ethSC.SolShare.Expense e : expenses) {
 					if (!e.exists) continue;
@@ -705,7 +705,18 @@ public class SolShareApp {
 		}
 
 		private static void removeUserFlow(SolShareHandler handler, BigInteger groupId) {
-			System.out.println("Remove user functionality is not implemented in the backend.");
+			System.out.print("Enter member name to remove: ");
+			String removeName = sc.nextLine();
+			String removeAddr = handler.getMemberAddress(groupId, removeName);
+			if (removeAddr == null || removeAddr.equals("0x0000000000000000000000000000000000000000") || removeAddr.equals("0x0") || removeAddr.equals("0")) {
+				System.out.println("Member not found.");
+				return;
+			}
+			System.out.println(ANSI_YELLOW + "Removing user... Confirmation pending..." + ANSI_RESET);
+			if (handler.removeMember(groupId, removeAddr))
+				System.out.println(ANSI_GREEN + "User removed." + ANSI_RESET);
+			else
+				System.out.println(ANSI_RED + "Failed to remove user." + ANSI_RESET);
 		}
 
 		private static void showEfficientSettlement(SolShareHandler handler, BigInteger groupId) {
